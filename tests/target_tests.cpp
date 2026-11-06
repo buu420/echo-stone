@@ -1,0 +1,5 @@
+#include "mvci/target.hpp"
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+int main(){auto path=std::filesystem::temp_directory_path()/L"mvci-hash-test-9bf28748.tmp";{std::ofstream f(path,std::ios::binary);f<<"abc";}auto a=mvci::sha256_file(path.wstring());{std::ofstream f(path,std::ios::binary);f<<"abd";}auto b=mvci::sha256_file(path.wstring());std::filesystem::remove(path);if(a!="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||a==b){std::cerr<<"artifact identity failed\n";return 1;}mvci::Memory m;std::array<unsigned char,16> bytes={0x40,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x81,0xec,0xf0};m.reader=[&](mvci::Address at,void* out,std::size_t n){if(at!=0x140000000+mvci::process_event_rva||n!=16)return false;std::memcpy(out,bytes.data(),n);return true;};if(!mvci::event_code_matches(m,0x140000000))return 2;bytes[2]^=1;if(mvci::event_code_matches(m,0x140000000))return 3;std::cout<<"changed artifact and changed loaded hook code rejected\n";return 0;}
