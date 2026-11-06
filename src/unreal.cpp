@@ -1,4 +1,5 @@
 #include "mvci/unreal.hpp"
+#include "mvci/localization.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
@@ -19,9 +20,19 @@ bool pointer(Address a){return a>=0x10000&&a<0x800000000000;}
 std::uint64_t identity(const ObjectRef& o){return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(o.serial))<<32)|static_cast<std::uint32_t>(o.index);}
 bool supported_label(const std::wstring& text){return !text.empty()&&text.rfind(L"msg_",0)!=0;}
 std::wstring legend(std::wstring s,bool keyboard){
- if(s.rfind(L"<_",0)==0){const auto end=s.find(L'>');if(end!=std::wstring::npos){const auto token=s.substr(0,end+1);auto label=s.substr(end+1);if(token==L"<_Decide>")return std::wstring(keyboard?L"Enter: ":L"Confirm: ")+label;if(token==L"<_Cancel>")return std::wstring(keyboard?L"Backspace: ":L"Cancel: ")+label;return label;}}
- return s;
+ if(s.rfind(L"<_",0)!=0)return s;
+ const auto end=s.find(L'>');if(end==std::wstring::npos)return s;
+ const auto token=s.substr(0,end+1),label=s.substr(end+1);
+ if(token==L"<_Decide>")return keyboard?tr(L"Enter: {0}",{label}):tr(L"Confirm: {0}",{label});
+ if(token==L"<_Cancel>")return keyboard?tr(L"Backspace: {0}",{label}):tr(L"Cancel: {0}",{label});
+ return label;
 }
+}
+
+bool is_umg_default_text(std::wstring_view text){
+ // Engine.locres UMG.TextBlockDefaultValue for the shipped engine cultures.
+ return text==L"Text Block"||text==L"Bloque de texto"||text==L"テキストブロック"||
+        text==L"텍스트 블록"||text==L"Bloco de Texto";
 }
 
 bool Memory::bytes(Address a,void* out,std::size_t size)const{
@@ -214,7 +225,7 @@ std::optional<MenuSnapshot> MenuCapture::dialog(const ObjectRef& o)const{
   body=rendered;
  }
  if(!body||!supported_label(*body)||!unreal_.alive(o))return {};
- MenuSnapshot s;s.valid=true;s.modal=true;s.identity=identity(o);s.screen=L"Dialog";s.label=*body;s.help=hints(o.address);return s;
+ MenuSnapshot s;s.valid=true;s.modal=true;s.identity=identity(o);s.screen=tr(L"Dialog");s.label=*body;s.help=hints(o.address);return s;
 }
 std::optional<MenuSnapshot> MenuCapture::movie_pause(const ObjectRef& o)const{
  // This screen's two guide actions are direct inputs, not focused Items.
@@ -280,7 +291,7 @@ std::optional<MenuSnapshot> MenuCapture::title(const ObjectRef& o)const{
  if(!unreal_.is_a(o.address,L"WD_Title_C")||!unreal_.shown(o.address,visibility_))return {};
  auto block=unreal_.object_field(o.address,L"TextBlock_213");if(!block||!*block||!unreal_.shown(*block,visibility_))return {};
  auto text=unreal_.text_field(*block,L"Text");if(!text||!supported_label(*text))return {};
- MenuSnapshot s;s.valid=true;s.identity=identity(o);s.screen=L"Title";s.label=*text;s.help=hints(o.address);return s;
+ MenuSnapshot s;s.valid=true;s.identity=identity(o);s.screen=tr(L"Title");s.label=*text;s.help=hints(o.address);return s;
 }
 MenuSnapshot MenuCapture::sample(std::uint64_t now){
  const auto count=unreal_.object_count();if(!count){widgets_.clear();object_count_=-1;return {};}

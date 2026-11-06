@@ -1,4 +1,5 @@
 #include "mvci/collection.hpp"
+#include "mvci/localization.hpp"
 #include <algorithm>
 #include <set>
 namespace mvci {
@@ -109,7 +110,7 @@ std::optional<MenuSnapshot> CollectionCapture::list(Address owner,Address top,co
  const auto label=rendered(*part,label_field);if(!label)return {};
  MenuSnapshot s;s.valid=true;s.label=*label;s.position=*focus+1;s.count=arr->count;
  if(disabled(*block)==std::optional<bool>(true))s.enabled=false;
- if(badge(*part,L"CanvasPanel_NewIcon"))s.value=L"New";
+ if(badge(*part,L"CanvasPanel_NewIcon"))s.value=tr(L"New");
  s.screen=caption;
  if(const auto title=rendered(owner,L"TextBlock_ModeTitle"))s.screen=*title;
  if(exact(owner,L"WD_DB_StItData_C")){
@@ -164,7 +165,7 @@ std::optional<MenuSnapshot> CollectionCapture::artwork(Address top,const std::ws
   if(const auto navi=child(*bar,L"WD_BtnNavi_9"))s.help=menu_hints(unreal_,*navi,visibility_,true);
   if(s.help.empty())s.help=help(top,top);
   if(!shown(*cell))return {};s.position=index+1;s.count=arr->count;
-  if(badge(*cell,L"CanvasPanel_NEW"))s.value=L"New";
+  if(badge(*cell,L"CanvasPanel_NEW"))s.value=tr(L"New");
   const auto after=unreal_.array(top,*p,max_buttons);
   if(!after||after->data!=arr->data||after->count!=arr->count||unreal_.integer(top,L"FocusIndex")!=row||unreal_.integer(top,L"FocusIndex_H")!=column||unreal_.integer(top,L"ListViewMax_H")!=columns||unreal_.integer(top,L"ListNum")!=rows)return {};
   if(get<Address>(after->data+static_cast<Address>(index)*8)!=cell||!unreal_.alive(*cell_ref))return {};

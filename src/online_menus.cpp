@@ -1,4 +1,5 @@
 #include "mvci/unreal.hpp"
+#include "mvci/localization.hpp"
 #include "widget_geometry.hpp"
 #include <limits>
 #include <string_view>
@@ -137,8 +138,8 @@ void append(std::wstring& out, const std::wstring& part) {
     out += part;
 }
 
-void captioned(std::wstring& out, const wchar_t* label, const std::wstring& value) {
-    if (!value.empty()) append(out, std::wstring(label) + L" " + value);
+void captioned(std::wstring& out, std::wstring_view message, const std::wstring& value) {
+    if (!value.empty()) append(out, tr(message, {value}));
 }
 
 std::wstring visible_guide(Frame& frame, Address root, const wchar_t* line_field = nullptr) {
@@ -174,7 +175,7 @@ MenuSnapshot lobby_results(Frame& frame, Address root) {
         const auto hidden_cursor = frame.field(root, L"Image_Cursor");
         if (cursor || !hidden_cursor || !*hidden_cursor || !frame.within(*hidden_cursor, root) ||
             !frame.u.is_a(*hidden_cursor, L"Image") || frame.shown(*hidden_cursor)) return pending();
-        auto out = selection(frame, root, std::move(screen), L"No lobbies found");
+        auto out = selection(frame, root, std::move(screen), tr(L"No lobbies found"));
         out.help = visible_guide(frame, root);
         return out;
     }
@@ -242,12 +243,12 @@ MenuSnapshot rankings(Frame& frame, Address root) {
     const auto row = row_at(frame, *rows, *focus, root, L"WD_RankList_C", *list);
     if (!row) return pending();
     auto screen = drawn_text(frame, root, L"TextBlock_BoardTitle");
-    if (screen.empty()) screen = L"Rankings";
+    if (screen.empty() || is_umg_default_text(screen)) screen = tr(L"Rankings");
     const auto body = shown_child(frame, *row, L"CanvasPanel_Body", L"CanvasPanel");
     const auto no_data = shown_child(frame, *row, L"CanvasPanel_NoDate", L"CanvasPanel");
     if (body.has_value() == no_data.has_value()) return pending();
     if (no_data) {
-        auto out = selection(frame, *row, std::move(screen), L"No ranking data");
+        auto out = selection(frame, *row, std::move(screen), tr(L"No ranking data"));
         out.help = visible_guide(frame, root, L"WD_LineHelp");
         return out;
     }
@@ -257,9 +258,8 @@ MenuSnapshot rankings(Frame& frame, Address root) {
     auto player = drawn_text(frame, *row, L"TextBlock_PlayerID");
     if (!equal_rank(rank, *top + *focus + 1) || player.empty()) return pending();
     auto out = selection(frame, *row, std::move(screen), std::move(player));
-    out.value = L"Rank " + rank;
     const auto suffix = drawn_text(frame, *row, L"TextBlock_Suffix");
-    if (!suffix.empty()) out.value += suffix;
+    out.value = tr(L"Rank {0}", {rank + suffix});
     const auto points = drawn_text(frame, *row, L"TextBlock_Points");
     const auto column = drawn_text(frame, root, L"TextBlock_Column2");
     if (!points.empty()) append(out.value, column.empty() ? points : column + L" " + points);
@@ -277,9 +277,10 @@ MenuSnapshot replay_row(Frame& frame, Address row, std::wstring screen, std::wst
     const auto date = drawn_text(frame, row, L"TextBlock_Date");
     const auto first = drawn_text(frame, row, L"TextBlock_UID1");
     const auto second = drawn_text(frame, row, L"TextBlock_UID2");
+    // Both widget designer placeholders are invariant across the shipped cultures.
     if (date.empty() || date == L"99/99/2099" || date == L"DATE") return pending();
     if (replay_empty_date(date) && first.empty() && second.empty()) {
-        auto out = selection(frame, row, std::move(screen), L"Empty replay slot");
+        auto out = selection(frame, row, std::move(screen), tr(L"Empty replay slot"));
         out.value = std::move(section);
         return out;
     }
@@ -287,13 +288,13 @@ MenuSnapshot replay_row(Frame& frame, Address row, std::wstring screen, std::wst
     const auto left_result = drawn_text(frame, row, L"TextBlock_Result1P");
     const auto right_result = drawn_text(frame, row, L"TextBlock_Result2P");
     auto out = selection(frame, row, std::move(screen),
-                         first.empty() ? second : second.empty() ? first : first + L" versus " + second);
+                         first.empty() ? second : second.empty() ? first : tr(L"{0} versus {1}", {first, second}));
     append(out.value, section);
     append(out.value, date);
     append(out.value, drawn_text(frame, row, L"TextBlock_MatchType"));
     if (!first.empty() && !left_result.empty()) append(out.value, first + L" " + left_result);
     if (!second.empty() && !right_result.empty()) append(out.value, second + L" " + right_result);
-    if (shown_child(frame, row, L"Image_Favorite", L"Image")) append(out.value, L"Marked favorite");
+    if (shown_child(frame, row, L"Image_Favorite", L"Image")) append(out.value, tr(L"Marked favorite"));
     return out;
 }
 
@@ -330,7 +331,7 @@ MenuSnapshot replays(Frame& frame, Address root) {
         section = drawn_text(frame, root, L"TextBlock_Label");
     }
     if (!row) return pending();
-    auto out = replay_row(frame, *row, L"Replays", std::move(section));
+    auto out = replay_row(frame, *row, tr(L"Replays"), std::move(section));
     out.help = visible_guide(frame, root, L"WD_LineHelp_366");
     return out;
 }
@@ -344,7 +345,7 @@ MenuSnapshot character_edit(Frame& frame, Address page) {
         if (!shown_child(frame, page, L"Image_CursorTop", L"Image")) return pending();
         auto target = drawn_text(frame, page, L"TextBlock_TargetType");
         if (target.empty()) return pending();
-        return selection(frame, page, L"Character Edit", std::move(target));
+        return selection(frame, page, tr(L"Character Edit"), std::move(target));
     }
     // ChangeFocusCore selects SettingItemArray[FocusIndex - 1]. UpdateCursor
     // moves the drawn list highlight toward that same index.
@@ -367,7 +368,7 @@ MenuSnapshot character_edit(Frame& frame, Address page) {
     auto label = drawn_text(frame, *row, L"TextBlock_ListItem");
     auto value = drawn_text(frame, *row, L"TextBlock_Value");
     if (label.empty() || value.empty()) return pending();
-    auto out = selection(frame, *row, L"Character Edit", std::move(label));
+    auto out = selection(frame, *row, tr(L"Character Edit"), std::move(label));
     out.value = std::move(value);
     return out;
 }
@@ -403,15 +404,16 @@ MenuSnapshot acquired_titles(Frame& frame, Address page) {
         frame.get<Address>(labels->data + static_cast<Address>(*cursor_x) * 8) != label_block ||
         !frame.u.is_a(*label_block, L"TextBlock") || !frame.within(*label_block, *row)) return pending();
     auto title = drawn_text(frame, *row, field);
+    if ((*cursor_x == 1 || *cursor_x == 2) && is_umg_default_text(title)) return pending();
     bool locked = false;
     if (title.empty()) {
         // setDisable hides the title but draws a dark plate. setAllItem hides both for a blank slot.
         if (frame.integer(*label_block, L"Visibility") != std::optional<int>(2) ||
             !shown_child(frame, *row, plates[*cursor_x], L"Image")) return pending();
-        title = L"Locked title";
+        title = tr(L"Locked title");
         locked = true;
     }
-    auto out = selection(frame, *label_block, L"Acquired Titles", std::move(title));
+    auto out = selection(frame, *label_block, tr(L"Acquired Titles"), std::move(title));
     out.enabled = !locked;
     const auto details = frame.boolean(page, L"isPopupActive");
     if (!details) return pending();
@@ -420,7 +422,7 @@ MenuSnapshot acquired_titles(Frame& frame, Address page) {
         const auto condition = frame.field(page, L"TextBlock_Condition");
         if (!popup || !condition || !*condition || !frame.within(*condition, *popup)) return pending();
         out.value = drawn_text(frame, page, L"TextBlock_Condition");
-        if (out.value.empty()) return pending();
+        if (out.value.empty() || is_umg_default_text(out.value)) return pending();
     }
     out.help = visible_guide(frame, page);
     return out;
@@ -454,7 +456,7 @@ MenuSnapshot profile_card(Frame& frame, Address spawn) {
     }
     const auto header = shown_child(frame, *card, L"WD_PFcardBase", L"WD_PFcardBase_C");
     auto screen = header ? drawn_text(frame, *header, L"TextBlock_Caption") : std::wstring{};
-    if (screen.empty()) screen = L"Profile Card";
+    if (screen.empty() || is_umg_default_text(screen)) screen = tr(L"Profile Card");
     MenuSnapshot out;
     if (*current == 0) {
         if (!popup_clear(frame, *page, L"CanvasPanel_CharcterEdit")) return pending();
@@ -462,10 +464,10 @@ MenuSnapshot profile_card(Frame& frame, Address spawn) {
         if (player.empty()) return pending();
         out = selection(frame, *page, std::move(screen), std::move(player));
         append(out.value, drawn_text(frame, *page, L"TextBlock_AcquiredTitle"));
-        captioned(out.value, L"Matches", drawn_text(frame, *page, L"TextBlock_TotalP"));
-        captioned(out.value, L"Wins", drawn_text(frame, *page, L"TextBlock_WinP"));
-        captioned(out.value, L"Losses", drawn_text(frame, *page, L"TextBlock_LossP"));
-        captioned(out.value, L"Draws", drawn_text(frame, *page, L"TextBlock_DrawP"));
+        captioned(out.value, L"Matches {0}", drawn_text(frame, *page, L"TextBlock_TotalP"));
+        captioned(out.value, L"Wins {0}", drawn_text(frame, *page, L"TextBlock_WinP"));
+        captioned(out.value, L"Losses {0}", drawn_text(frame, *page, L"TextBlock_LossP"));
+        captioned(out.value, L"Draws {0}", drawn_text(frame, *page, L"TextBlock_DrawP"));
     } else if (*current == 3) {
         const auto rows = frame.array(*page, L"ListItemArray", 5);
         const auto focus = frame.integer(*page, L"indexFocus");
@@ -475,19 +477,19 @@ MenuSnapshot profile_card(Frame& frame, Address spawn) {
         const auto body = shown_child(frame, *row, L"CanvasPanel_List", L"CanvasPanel");
         const auto empty = shown_child(frame, *row, L"CanvasPanel_NoData", L"CanvasPanel");
         if (body.has_value() == empty.has_value()) return pending();
-        out = empty ? selection(frame, *row, std::move(screen), L"Empty replay slot")
+        out = empty ? selection(frame, *row, std::move(screen), tr(L"Empty replay slot"))
                     : replay_row(frame, *row, std::move(screen), {});
     } else {
         if (frame.boolean(*page, L"onReady") != std::optional<bool>(true)) return pending();
         const auto matches = drawn_text(frame, *page, L"TextBlock_Total");
         if (matches.empty()) return pending();
-        out = selection(frame, *page, std::move(screen), *current == 1 ? L"Offline battle record" : L"Online battle record");
-        captioned(out.value, L"Matches", matches);
-        captioned(out.value, L"Wins", drawn_text(frame, *page, L"TextBlock_Wins"));
-        captioned(out.value, L"Losses", drawn_text(frame, *page, L"TextBlock_Losses"));
-        captioned(out.value, L"Draws", drawn_text(frame, *page, L"TextBlock_Draws"));
-        captioned(out.value, L"Win rate", drawn_text(frame, *page, L"TextBlock_WinRatio"));
-        captioned(out.value, L"Play time", drawn_text(frame, *page, L"TextBlock_PlayTime"));
+        out = selection(frame, *page, std::move(screen), *current == 1 ? tr(L"Offline battle record") : tr(L"Online battle record"));
+        captioned(out.value, L"Matches {0}", matches);
+        captioned(out.value, L"Wins {0}", drawn_text(frame, *page, L"TextBlock_Wins"));
+        captioned(out.value, L"Losses {0}", drawn_text(frame, *page, L"TextBlock_Losses"));
+        captioned(out.value, L"Draws {0}", drawn_text(frame, *page, L"TextBlock_Draws"));
+        captioned(out.value, L"Win rate {0}", drawn_text(frame, *page, L"TextBlock_WinRatio"));
+        captioned(out.value, L"Play time {0}", drawn_text(frame, *page, L"TextBlock_PlayTime"));
     }
     out.help = visible_guide(frame, *card, L"WD_LineHelp");
     return out;
@@ -504,7 +506,7 @@ MenuSnapshot lobby_members(Frame& frame, Address popup) {
     if (profile_open != std::optional<bool>(false) || !focus || *focus < 0 || *focus > 9 ||
         !shown_child(frame, popup, L"CanvasPanel_Cursor", L"CanvasPanel")) return pending();
     auto screen = drawn_text(frame, popup, L"TextBlock_Caption");
-    if (screen.empty()) screen = L"Lobby Members";
+    if (screen.empty()) screen = tr(L"Lobby Members");
     MenuSnapshot out;
     if (*focus < 8) {
         const auto rows = frame.array(popup, L"WDListButtons", 8);
@@ -547,7 +549,7 @@ MenuSnapshot room_choice(Frame& frame, Address popup) {
 
 MenuSnapshot lobby_rule(Frame& frame, Address popup) {
     auto screen = drawn_text(frame, popup, L"TextBlock_Caption");
-    if (screen.empty()) screen = L"Lobby Rules";
+    if (screen.empty()) screen = tr(L"Lobby Rules");
     const auto host = frame.boolean(popup, L"isHost");
     if (!host) return pending();
     const auto value = [&](Address row) {
@@ -564,7 +566,9 @@ MenuSnapshot lobby_rule(Frame& frame, Address popup) {
         for (const auto* field : {L"item_battleRule", L"item_battleTime", L"item_battleStyle"}) {
             const auto row = shown_child(frame, popup, field, L"WD_OptionItem_SpinText_C");
             if (!row) continue;
-            if (const auto opt = value(*row)) captioned(out.value, opt->label.c_str(), opt->value);
+            if (const auto opt = value(*row); opt && !opt->value.empty()) {
+                append(out.value, opt->label + L" " + opt->value);
+            }
         }
         if (out.value.empty()) return pending();
         out.help = visible_guide(frame, popup, L"WD_LineHelp");
@@ -611,14 +615,14 @@ MenuSnapshot lobby_room(Frame& frame, Address root) {
     auto label = drawn_text(frame, *room, L"TextBlock_TypeNo");
     if (label.empty()) return pending();
     auto screen = drawn_text(frame, root, L"TextBlock_Title");
-    if (screen.empty()) screen = L"Lobby";
+    if (screen.empty()) screen = tr(L"Lobby");
     auto out = selection(frame, *room, std::move(screen), std::move(label));
     append(out.value, drawn_text(frame, *room, L"TextBlock_inBattle"));
     append(out.value, drawn_text(frame, *room, L"TextBlock_inTraining"));
     append(out.value, drawn_text(frame, *room, L"TextBlock_1PID"));
     append(out.value, drawn_text(frame, *room, L"TextBlock_2PID"));
-    captioned(out.value, L"Host", drawn_text(frame, root, L"TextBlock_HostID"));
-    captioned(out.value, L"Lobby ID", drawn_text(frame, root, L"TextBlock_UniqueID"));
+    captioned(out.value, L"Host {0}", drawn_text(frame, root, L"TextBlock_HostID"));
+    captioned(out.value, L"Lobby ID {0}", drawn_text(frame, root, L"TextBlock_UniqueID"));
     out.help = visible_guide(frame, root, L"WD_LineHelp");
     return out;
 }

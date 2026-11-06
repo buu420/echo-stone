@@ -1,3 +1,4 @@
+#include "mvci/localization.hpp"
 #include "mvci/unreal.hpp"
 #include "widget_geometry.hpp"
 #include <cmath>
@@ -82,7 +83,7 @@ std::optional<std::wstring> command_line(Frame& f,Address row,const std::wstring
   if(const auto code=icon_code(t)){if(!f.u.is_a(*c,L"Image")||!icon_resource(f,*c,row,*code))return {};}
   else{if(!f.u.is_a(*c,L"TextBlock"))return {};const auto v=f.display(*c);if(!v||*v!=t)return {};}
  }
- std::wstring out;for(const auto& t:logical){const auto code=icon_code(t);join(out,code?icon_label(*code):t,L", ");}return out;
+ std::wstring out;for(const auto& t:logical){const auto code=icon_code(t);join(out,code?tr(icon_label(*code)):t,L", ");}return out;
 }
 std::optional<std::wstring> visible_text(Frame& f,Address owner,const wchar_t* name){const auto v=f.text(owner,name);if(!v||!story_detail::readable(*v))return {};return v;}
 std::optional<std::wstring> row_text(Frame& f,Address row,bool is_category,const std::wstring& name,const std::wstring& command){
@@ -93,7 +94,7 @@ std::optional<std::wstring> row_text(Frame& f,Address row,bool is_category,const
  }
  const auto n=visible_text(f,row,L"TextBlock_Name");const auto np=f.u.property(row,L"CommandName"),cp=f.u.property(row,L"CommandText");
  if(!n||*n!=name||!np||np->kind!=L"TextProperty"||!cp||cp->kind!=L"StrProperty"||ftext(f,row+static_cast<Address>(np->offset))!=std::optional<std::wstring>(name)||fstring(f,row+static_cast<Address>(cp->offset))!=std::optional<std::wstring>(command))return {};
- const auto line=command_line(f,row,command);if(!line)return {};std::wstring out=*n;if(!line->empty()){out+=L": ";out+=*line;}return out;
+ const auto line=command_line(f,row,command);if(!line)return {};return line->empty()?*n:tr(L"{0}: {1}",{*n,*line});
 }
 // Row root: WidgetTree.RootWidget is a CanvasPanel whose single, non-collapsed, fixed-size child is docked
 // vertically at Top 0, Bottom 130, so SConstraintCanvas desired height (and the VerticalBox step) is 130.
@@ -177,9 +178,9 @@ std::optional<MenuSnapshot> document(Frame& f,Address list){
   const auto t=row_text(f,rows[static_cast<std::size_t>(i)],category((*texts)[static_cast<std::size_t>(i)]),(*names)[static_cast<std::size_t>(i)],(*texts)[static_cast<std::size_t>(i)]);if(!t)return REJECT;join(label,*t);
  }
  const auto character=visible_text(f,list,L"TextBlock_CharName");if(!character)return REJECT;
- std::wstring value=L"Rows "+std::to_wstring(first+1)+L" to "+std::to_wstring(last+1)+L" of "+std::to_wstring(*count);
+ std::wstring value=tr(L"Rows {0} to {1} of {2}",{std::to_wstring(first+1),std::to_wstring(last+1),std::to_wstring(*count)});
  for(const auto& [field,cue]:{std::pair<const wchar_t*,const wchar_t*>{L"Image_MoreUP",L"More above"},{L"Image_MoreBottom",L"More below"}}){
-  const auto image=f.field(list,field);if(!image)return REJECT;if(*image&&f.within(*image,list)&&f.shown(*image))join(value,cue);
+  const auto image=f.field(list,field);if(!image)return REJECT;if(*image&&f.within(*image,list)&&f.shown(*image))join(value,tr(cue));
  }
  std::wstring help;if(const auto notice=f.text(list,L"TextBlock_Notice");notice&&story_detail::readable(*notice))join(help,*notice);
  const auto shown_image=[&](const wchar_t* field)->Address{
@@ -188,12 +189,12 @@ std::optional<MenuSnapshot> document(Frame& f,Address list){
  };
  if(shown_image(L"Image_ArrowL")&&shown_image(L"Image_ArrowR")){
   const auto previous=shown_image(L"Image_BtnNavi_LB"), next=shown_image(L"Image_BtnNavi_RB");
-  if(previous&&next&&f.glyph(previous)==L"LB"&&f.glyph(next)==L"RB")join(help,L"Switch character with LB or RB");
-  else join(help,L"Switch character");
+  if(previous&&next&&f.glyph(previous)==L"LB"&&f.glyph(next)==L"RB")join(help,tr(L"Switch character with {0} or {1}",{L"LB",L"RB"}));
+  else join(help,tr(L"Switch character"));
  }
  join(help,f.hints(list,false));
  if(!f.finish())return REJECT;
- MenuSnapshot out;out.valid=true;out.identity=identity(*f.u.object(list));out.screen=L"Command list: "+*character;out.label=label;out.value=value;out.help=help;return out;
+ MenuSnapshot out;out.valid=true;out.identity=identity(*f.u.object(list));out.screen=tr(L"Command list: {0}",{*character});out.label=label;out.value=value;out.help=help;return out;
 }
 }
 std::optional<std::wstring> story_detail::command_glyph(Frame& f,Address image){
@@ -203,7 +204,7 @@ std::optional<std::wstring> story_detail::command_glyph(Frame& f,Address image){
  if(name.size()<4)return {};
  const auto index=icon_code(name.substr(name.size()-4));
  if(!index||!icon_material(f,*resource,*index))return {};
- return std::wstring(icon_label(*index));
+ return tr(icon_label(*index));
 }
 MenuSnapshot story_commands(Unreal& u,const std::function<std::optional<int>(Address)>& visibility){
  MenuSnapshot out;

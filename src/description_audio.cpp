@@ -44,10 +44,10 @@ struct DescriptionAudio::Impl:DescriptionOutput {
  StoryTextSnapshot notice(const Snapshot& s,bool enabled)const{
   const auto& n=s.story.movie;if(!enabled||!s.foreground||!n.context||!n.playing||n.id.empty())return {};
   std::wstring text;
-  if(!movie)text=L"Audio descriptions are not yet available for this movie.";
-  else if(timing_bad&&GetTickCount64()>=timing_bad_at&&GetTickCount64()-timing_bad_at>=500)text=L"Audio description timing is unavailable for this movie.";
-  else if(loader.view().stage==DescriptionBankStage::Failed)text=L"Audio description recordings could not be loaded.";
-  else if(!wave.healthy())text=L"Audio description playback is unavailable.";
+  if(!movie)text=tr(L"Audio descriptions are not yet available for this movie.");
+  else if(timing_bad&&GetTickCount64()>=timing_bad_at&&GetTickCount64()-timing_bad_at>=500)text=tr(L"Audio description timing is unavailable for this movie.");
+  else if(loader.view().stage==DescriptionBankStage::Failed)text=tr(L"Audio description recordings could not be loaded.");
+  else if(!wave.healthy())text=tr(L"Audio description playback is unavailable.");
   return text.empty()?StoryTextSnapshot{}:StoryTextSnapshot{true,n.context^0x4445534352495054ull,text};
  }
  std::string diagnostic()const{

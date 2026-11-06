@@ -1,4 +1,5 @@
 #pragma once
+#include "mvci/localization.hpp"
 #include "mvci/unreal.hpp"
 #include <algorithm>
 #include <cmath>
@@ -85,7 +86,7 @@ struct Frame {
   if(!resource||!*resource||!retain(*resource))return {};return resource;
  }
  std::wstring glyph(Address image){
-  const std::wstring unknown=L"(button icon)";const auto resource=image_resource(image);if(!resource)return unknown;
+  const auto unknown=tr(L"(button icon)");const auto resource=image_resource(image);if(!resource)return unknown;
   Address material=*resource;
   if(u.is_a(material,L"MaterialInstanceDynamic")){const auto parent=field(material,L"Parent");if(!parent||!*parent)return unknown;material=*parent;}
   if(!u.is_a(material,L"MaterialInstance"))return unknown;
@@ -98,7 +99,7 @@ struct Frame {
    const auto package=get<Address>(material+0x20);
    if(package&&*package&&retain(*package))for(const auto platform:{L"PC",L"Steam"}){
     const auto path=std::wstring(L"/Game/UI/BaseAsset/Platform/")+platform+L"/"+name;
-    if(u.name_is(*package,path))return suffix==L"Dir"?L"directional controls":L"analog stick";
+    if(u.name_is(*package,path))return suffix==L"Dir"?tr(L"directional controls"):tr(L"analog stick");
    }
   }return unknown;
  }

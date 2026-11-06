@@ -7,6 +7,8 @@
 
 namespace mvci {
 using Address=std::uintptr_t;
+// Use on authored TextBlocks whose native designer default is not game content.
+bool is_umg_default_text(std::wstring_view);
 class Memory {
 public:
  using Reader=std::function<bool(Address,void*,std::size_t)>;

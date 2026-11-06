@@ -1,4 +1,5 @@
 #include "mvci/mission.hpp"
+#include "mvci/localization.hpp"
 #include "widget_geometry.hpp"
 #include <algorithm>
 #include <set>
@@ -12,8 +13,8 @@ bool derives(const Unreal& u,Address a,const wchar_t* wanted){
  while(c&&seen.size()<64&&seen.insert(c).second){if(!u.object(c))return false;if(u.name_is(c,wanted))return true;const auto next=u.memory().get<Address>(c+0x30);if(!next)return false;c=*next;}return false;
 }
 bool readable(const std::wstring& s){
- if(s.empty()||s.rfind(L"msg_",0)==0)return false;
- const wchar_t* const templates[]{L"Text Block",L"CLEARED X",L"CLEARED 0",L"操作",L"MISSION X",L"Mission Data Mission Data Mission Data"};
+ if(s.empty()||s.rfind(L"msg_",0)==0||is_umg_default_text(s))return false;
+ const wchar_t* const templates[]{L"CLEARED X",L"CLEARED 0",L"操作",L"MISSION X",L"Mission Data Mission Data Mission Data"};
  return std::none_of(std::begin(templates),std::end(templates),[&](const wchar_t* t){return s==t;});
 }
 void sentence(std::wstring& out,const std::wstring& part){if(part.empty())return;if(!out.empty()){const auto last=out.back();out+=(last==L'.'||last==L'!'||last==L'?')?L" ":L". ";}out+=part;}
@@ -70,7 +71,7 @@ MenuSnapshot battle_tutorial(Frame& frame,Address window){
  const auto ref=frame.u.object(window);
  if(!instructions||!ref)return pending;
  MenuSnapshot result;result.valid=true;result.modal=true;result.identity=identity(*ref);
- result.screen=L"Mission tutorial";
+ result.screen=tr(L"Mission tutorial");
  if(number&&readable(*number)&&*number!=L"MISSION 0"){
   result.label=*number;result.help=*instructions;
  }else result.label=*instructions;
@@ -143,7 +144,7 @@ std::optional<std::wstring> rendered_mission_command(Frame& frame,Address row,Ad
    if(*alpha==0)continue;
    part=frame.display(*token);
   }else if(frame.u.is_a(*token,L"Image")){
-   part=story_detail::command_glyph(frame,*token).value_or(L"(move icon)");
+   part=story_detail::command_glyph(frame,*token).value_or(tr(L"(move icon)"));
   }
   if(!part||!readable(*part))return {};
   if(!command.empty())command+=L" ";
@@ -235,11 +236,11 @@ std::wstring battle_commands(Frame& frame,const CommandPane& pane){
   const bool selected=current_command(frame,*row,*panel);
   if(selected&&marked)return {};
   marked|=selected;
-  sentence(commands,selected?L"Current command. "+*command:*command);
+  sentence(commands,selected?tr(L"Current command. {0}",{*command}):*command);
   if(commands.size()>16384)return {};
  }
  if(commands.empty())return {};
- return L"Mission commands. "+commands;
+ return tr(L"Mission commands. {0}",{commands});
 }
 }
 MissionBattleSnapshot MissionCapture::battle(bool read_hud,bool read_commands)const{
@@ -328,7 +329,7 @@ MenuSnapshot MissionCapture::sample(std::uint64_t now){
  const auto chip=frame.get<Address>(chips->data+static_cast<Address>(*column)*8);
  if(!chip||!*chip||!frame.retain(*chip)||!unreal_.is_a(*chip,L"Image")||!frame.within(*chip,*row)||!frame.shown(*chip))return fail(L"mission: selected mission chip is not drawn");
  const auto decide=frame.boolean(*root,L"isDecide"),suppressed=frame.boolean(*root,L"suppressPopup");if(!decide||!suppressed)return fail(L"mission: popup state is unreadable");
- MenuSnapshot s;s.valid=true;s.modal=*decide;s.screen=L"Missions. "+*caption;s.label=*label;s.position=*focus+1;s.count=rows->count;
+ MenuSnapshot s;s.valid=true;s.modal=*decide;s.screen=tr(L"Missions. {0}",{*caption});s.label=*label;s.position=*focus+1;s.count=rows->count;
  pending.modal=*decide;
  const auto notice=frame.field(*root,L"WD_KeyConfAttention_272");
  bool notice_shown=false;
@@ -351,7 +352,7 @@ MenuSnapshot MissionCapture::sample(std::uint64_t now){
   if(const auto completed=frame.text(*popup,L"TextBlock_Cleared");completed){if(!readable(*completed))return fail(L"mission: completion text not ready");sentence(s.value,*completed);}
   popup_shown=true;
  }
- if(!popup_shown)s.value=L"Mission "+std::to_wstring(*column+1)+L" of "+std::to_wstring(missions); // Visible cursor/chip, not a save-data lookup.
+ if(!popup_shown)s.value=tr(L"Mission {0} of {1}",{std::to_wstring(*column+1),std::to_wstring(missions)}); // Visible cursor/chip, not a save-data lookup.
  sentence(s.value,*clear);
  if(*decide){
   if(!popup_shown)return fail(L"mission: confirmation details not ready");

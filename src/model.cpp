@@ -11,15 +11,24 @@ constexpr std::size_t loading_caption=3;
 bool range(const std::optional<double>& v,double low,double high){return v&&std::isfinite(*v)&&*v>=low&&*v<=high;}
 std::wstring number(double value){
  std::wostringstream s;s.imbue(std::locale::classic());s<<std::fixed<<std::setprecision(2)<<value;
- auto out=s.str();while(!out.empty()&&out.back()==L'0')out.pop_back();if(!out.empty()&&out.back()==L'.')out.pop_back();return out;
+ auto out=s.str();while(!out.empty()&&out.back()==L'0')out.pop_back();if(!out.empty()&&out.back()==L'.')out.pop_back();
+ const auto language=formatting_language();
+ if(language==Language::Arabic)std::replace(out.begin(),out.end(),L'.',L'\u066b');
+ else if(language==Language::German||language==Language::Spanish||
+         language==Language::French||
+         language==Language::Italian||language==Language::Polish||
+         language==Language::BrazilianPortuguese||language==Language::Russian)
+  std::replace(out.begin(),out.end(),L'.',L',');
+ return out;
 }
 std::wstring percent(double v){return std::to_wstring(static_cast<int>(std::floor(v*100+0.000001)));}
 std::wstring health_text(const FighterSnapshot& fighter,bool tracked){
- std::wstring text=tracked?L"Your health ":L"Opponent health ";
- if(!range(fighter.health_percent,0,100))return text+L"unavailable.";
+ if(!range(fighter.health_percent,0,100))
+  return tracked?tr(L"Your health unavailable."):tr(L"Opponent health unavailable.");
  const double health=*fighter.health_percent;
  const auto value=health==0?0L:health==100?100L:std::clamp(std::lround(health),1L,99L);
- return text+std::to_wstring(value)+L" percent.";
+ const auto amount=std::to_wstring(value);
+ return tracked?tr(L"Your health {0} percent.",{amount}):tr(L"Opponent health {0} percent.",{amount});
 }
 std::wstring health_source(const Snapshot& s,int team){
  if(!s.combat.valid||!s.combat.playable||!s.combat.session||s.menu.valid||s.menu.blocked)return {};
@@ -28,12 +37,12 @@ std::wstring health_source(const Snapshot& s,int team){
  return L"combat:health:"+std::to_wstring(team)+L"|"+std::to_wstring(s.combat.session)+L"|"+
   std::to_wstring(*fighter.health_fighter);
 }
-std::wstring meter_ready(int level){return L"Level "+std::to_wstring(level)+L" meter ready.";}
+std::wstring meter_ready(int level){return tr(L"Level {0} meter ready.",{std::to_wstring(level)});}
 std::wstring menu_text(const MenuSnapshot& m){
  std::wstring text;if(!m.screen.empty())text=m.screen+L". ";text+=m.label;
  if(!m.value.empty())text+=L", "+m.value;
- if(!m.enabled)text+=L". Unavailable";
- if(m.position>0&&m.count>=m.position)text+=L". "+std::to_wstring(m.position)+L" of "+std::to_wstring(m.count);
+ if(!m.enabled)text+=L". "+tr(L"Unavailable");
+ if(m.position>0&&m.count>=m.position)text+=L". "+tr(L"{0} of {1}",{std::to_wstring(m.position),std::to_wstring(m.count)});
  if(!m.help.empty())text+=L". "+m.help;
  return text+L".";
 }
@@ -62,23 +71,24 @@ std::optional<bool> left(const CombatSnapshot& c,int player){
  return d<0;
 }
 std::wstring status_text(const CombatSnapshot& c,int player){
- if(!c.valid||!c.session)return L"Combat status unavailable.";
- const auto& f=c.fighters[player];std::wstring text=L"Player "+std::to_wstring(player+1)+L". ";
- if(const auto side=left(c,player))text+=*side?L"Left side. ":L"Right side. ";else text+=L"Side unavailable. ";
+ if(!c.valid||!c.session)return tr(L"Combat status unavailable.");
+ const auto& f=c.fighters[player];std::wstring text=tr(L"Player {0}.",{std::to_wstring(player+1)})+L" ";
+ if(const auto side=left(c,player))text+=(*side?tr(L"Left side."):tr(L"Right side."))+L" ";
+ else text+=tr(L"Side unavailable.")+L" ";
  text+=health_text(f,true)+L" "+health_text(c.fighters[1-player],false)+L" ";
  if(range(f.hyper_bars,0,4)){
   // Keep the spoken stock count on the same side of the readiness boundary
   // as the displayed digit, even when the partial bar is almost full.
   const double spoken_bars=std::min(*f.hyper_bars,std::floor(*f.hyper_bars)+0.99);
-  text+=L"Hyper Combo "+number(spoken_bars)+L" of 4 bars. ";
+  text+=tr(L"Hyper Combo {0} of 4 bars.",{number(spoken_bars)})+L" ";
   if(*f.hyper_bars>=1)text+=meter_ready(*f.hyper_bars>=3?3:1)+L" ";
- }else text+=L"Hyper Combo unavailable. ";
+ }else text+=tr(L"Hyper Combo unavailable.")+L" ";
  if(f.storm_active&&*f.storm_active){
-  text+=L"Infinity Storm active. ";if(range(f.infinity_fraction,0,1))text+=L"Storm gauge "+percent(*f.infinity_fraction)+L" percent remaining.";
+  text+=tr(L"Infinity Storm active.")+L" ";if(range(f.infinity_fraction,0,1))text+=tr(L"Storm gauge {0} percent remaining.",{percent(*f.infinity_fraction)});
  }else if(f.storm_active&&range(f.infinity_fraction,0,1)){
-  text+=L"Infinity "+percent(*f.infinity_fraction)+L" percent.";
-  if(f.infinity_ready&&*f.infinity_ready)text+=L" Infinity Storm ready.";
- }else text+=L"Infinity unavailable.";
+  text+=tr(L"Infinity {0} percent.",{percent(*f.infinity_fraction)});
+  if(f.infinity_ready&&*f.infinity_ready)text+=L" "+tr(L"Infinity Storm ready.");
+ }else text+=tr(L"Infinity unavailable.");
  return text;
 }
 }
@@ -94,6 +104,7 @@ std::optional<Model::HealthBase> Model::health_base(const FighterSnapshot& fight
 
 std::wstring menu_fingerprint(const MenuSnapshot& m){return m.valid&&!m.label.empty()?menu_key(m):L"";}
 std::wstring speech_source_fingerprint(const Snapshot& s,const std::wstring& expected){
+ LanguageScope language(s.language);
  if(const auto menu=menu_fingerprint(s.menu);!menu.empty())return menu;
  if(expected.rfind(L"combat:health:0|",0)==0)return health_source(s,0);
  if(expected.rfind(L"combat:health:1|",0)==0)return health_source(s,1);
@@ -129,19 +140,53 @@ bool Model::acknowledge(std::uint64_t token,bool success,std::uint64_t now,std::
  return true;
 }
 
+std::wstring Model::control_confirmation(Request request)const{
+ switch(request){
+  case Request::SelectPlayer:
+   return tr(L"Tracking Player {0}.",{std::to_wstring(player_+1)});
+  case Request::ToggleBeacon:
+   return beacon_?tr(L"Distance beacon on."):tr(L"Distance beacon off.");
+  case Request::ToggleSide:
+   return side_announcements_?tr(L"Side announcements on."):tr(L"Side announcements off.");
+  case Request::ToggleDescriptions:
+   return descriptions_?tr(L"Story audio descriptions on."):tr(L"Story audio descriptions off.");
+  default:
+   return {};
+ }
+}
+
 Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
+ LanguageScope language(s.language);
+ if(language_!=s.language){
+  language_=s.language;
+  const auto retry=pending_&&pending_->speech.priority==Priority::Manual?pending_request_:Request::None;
+  auto key=retry!=Request::None?std::move(pending_->key):std::wstring{};
+  pending_.reset();
+  pending_request_=Request::None;
+  // A demand-driven HUD read may already have its snapshot. Keep the
+  // request and retire its speech token so it can be formatted again.
+  if(request==Request::None&&retry!=Request::None){
+   if(retry==Request::ReadCombat||retry==Request::ReadMenu)request=retry;
+   else{
+    pending_request_=retry;
+    propose(std::move(key),control_confirmation(retry),Priority::Manual,s.observed_ms,[]{});
+   }
+  }
+  accepted_menu_.clear();
+  for(std::size_t i=0;i<accepted_story_.size();++i)if(i!=loading_caption)accepted_story_[i].clear();
+ }
  Result result;
  const bool fresh=s.foreground&&now>=s.observed_ms&&now-s.observed_ms<=freshness_ms;
  if(!fresh){
   accepted_menu_.clear();for(std::size_t i=0;i<accepted_story_.size();++i)if(i!=loading_caption)accepted_story_[i].clear();candidate_.reset();
   if(s.foreground&&pending_&&pending_->speech.priority==Priority::Manual){
-   Snapshot unavailable;unavailable.foreground=true;unavailable.observed_ms=now;
+   Snapshot unavailable;unavailable.language=s.language;unavailable.foreground=true;unavailable.observed_ms=now;
    return update(unavailable,now,request);
   }
   pending_.reset();pending_request_=Request::None;
   // An explicit key still gets an unavailable answer when capture stops.
   // Only mod controls and unavailable readings use this empty observation.
-  if(s.foreground&&request!=Request::None){Snapshot unavailable;unavailable.foreground=true;unavailable.observed_ms=now;return update(unavailable,now,request);}
+  if(s.foreground&&request!=Request::None){Snapshot unavailable;unavailable.language=s.language;unavailable.foreground=true;unavailable.observed_ms=now;return update(unavailable,now,request);}
   return result;
  }
  const bool readable=s.menu.valid&&!s.menu.label.empty();
@@ -166,18 +211,18 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
  if(request!=Request::None)pending_request_=request;
  if(request==Request::SelectPlayer){
   player_=1-player_;resources_[player_]={};health_={};next_health_team_=player_;side_.reset();candidate_.reset();pending_.reset();
-  result.speech=propose(L"player",L"Tracking Player "+std::to_wstring(player_+1)+L".",Priority::Manual,s.observed_ms,[]{});return result;
+  result.speech=propose(L"player",control_confirmation(request),Priority::Manual,s.observed_ms,[]{});return result;
  }
  if(request==Request::ToggleBeacon){
-  beacon_=!beacon_;result.speech=propose(L"beacon",beacon_?L"Distance beacon on.":L"Distance beacon off.",Priority::Manual,s.observed_ms,[]{});
+  beacon_=!beacon_;result.speech=propose(L"beacon",control_confirmation(request),Priority::Manual,s.observed_ms,[]{});
  }
  if(request==Request::ToggleSide){
   side_announcements_=!side_announcements_;side_.reset();candidate_.reset();pending_.reset();
-  result.speech=propose(L"side-control",side_announcements_?L"Side announcements on.":L"Side announcements off.",Priority::Manual,s.observed_ms,[]{});
+  result.speech=propose(L"side-control",control_confirmation(request),Priority::Manual,s.observed_ms,[]{});
  }
  if(request==Request::ToggleDescriptions){
   descriptions_=!descriptions_;pending_.reset();
-  result.speech=propose(L"descriptions-control",descriptions_?L"Story audio descriptions on.":L"Story audio descriptions off.",Priority::Manual,s.observed_ms,[]{});
+  result.speech=propose(L"descriptions-control",control_confirmation(request),Priority::Manual,s.observed_ms,[]{});
  }
  const bool playing=c.valid&&c.session&&c.playable&&!s.menu.valid&&!s.menu.blocked;
  if(playing&&!c.cinematic&&beacon_&&c.normalized_distance&&std::isfinite(*c.normalized_distance)){
@@ -190,7 +235,7 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
  if(request==Request::ToggleBeacon||request==Request::ToggleSide||request==Request::ToggleDescriptions||retry_control)return result;
  if(request==Request::ReadMenu){
   const auto story=story_repeat_fingerprint(s);const auto key=readable?menu_key(s.menu):!story.empty()?story:L"unavailable-menu";
-  const auto text=readable?menu_text(s.menu):!story.empty()?story_text(s.story):L"Current menu and Story text unavailable.";
+  const auto text=readable?menu_text(s.menu):!story.empty()?story_text(s.story):tr(L"Current menu and Story text unavailable.");
   // Mission commands are captured on demand. Keep the submitted reading alive
   // for the same HUD after releasing the capture request.
   const auto source=readable?key:story.empty()?L"":s.mission_hud?mission_repeat_source(s):key;
@@ -198,7 +243,12 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
  }
  if(request==Request::ReadCombat){
   const auto copied=c;const int player=player_;
-  auto status=status_text(c,player_);if(s.story.valid){if(s.story.enemies_remaining)status+=L" Enemies remaining "+std::to_wstring(*s.story.enemies_remaining)+L".";if(s.story.time_seconds)status+=L" Time "+std::to_wstring(*s.story.time_seconds)+L" seconds.";else if(s.story.infinite_time)status+=L" Time infinite.";}
+  auto status=status_text(c,player_);
+  if(s.story.valid){
+   if(s.story.enemies_remaining)status+=L" "+tr(L"Enemies remaining {0}.",{std::to_wstring(*s.story.enemies_remaining)});
+   if(s.story.time_seconds)status+=L" "+tr(L"Time {0} seconds.",{std::to_wstring(*s.story.time_seconds)});
+   else if(s.story.infinite_time)status+=L" "+tr(L"Time infinite.");
+  }
   result.speech=propose(L"combat-status",status,Priority::Manual,s.observed_ms,[this,copied,player]{
    if(!copied.valid||copied.session!=session_)return;
    const auto& f=copied.fighters[player];auto& base=resources_[player];
@@ -236,7 +286,7 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
  else if(!relation)candidate_.reset();
  else if(candidate_!=relation){candidate_=relation;candidate_since_=now;}
  else if((!side_||side_!=relation)&&now>=candidate_since_&&now-candidate_since_>=50){
-  const auto side=*relation;result.speech=propose(side?L"side-left":L"side-right",side?L"Left side.":L"Right side.",Priority::Side,s.observed_ms,[this,side]{side_=side;});return result;
+  const auto side=*relation;result.speech=propose(side?L"side-left":L"side-right",side?tr(L"Left side."):tr(L"Right side."),Priority::Side,s.observed_ms,[this,side]{side_=side;});return result;
  }
  // At round entry, let the initial side settle before starting a resource line
  // which that 50 ms side announcement would otherwise interrupt and consume.
@@ -244,12 +294,13 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
  const int player=player_;
  if(f.storm_active&&base.storm!=f.storm_active){
   const bool active=*f.storm_active;
-  result.speech=propose(active?L"storm-on":L"storm-off",active?L"Infinity Storm active.":L"Infinity Storm ended.",Priority::Storm,s.observed_ms,[this,player,active]{auto& b=resources_[player];b.storm=active;b.ready=false;b.full=false;});return result;
+  result.speech=propose(active?L"storm-on":L"storm-off",active?tr(L"Infinity Storm active."):tr(L"Infinity Storm ended."),Priority::Storm,s.observed_ms,[this,player,active]{auto& b=resources_[player];b.storm=active;b.ready=false;b.full=false;});return result;
  }
  if(last_combat_speech_&&now>=last_combat_speech_&&now-last_combat_speech_<800){pending_.reset();return result;}
  if(stocks&&(!base.stocks||*stocks>*base.stocks)){
   const int value=*stocks, previous=base.stocks.value_or(0);
-  std::wstring text=value==4?L"Hyper Combo full. 4 bars.":L"Hyper Combo "+std::to_wstring(value)+(value==1?L" bar.":L" bars.");
+  std::wstring text=value==4?tr(L"Hyper Combo full. 4 bars."):
+   value==1?tr(L"Hyper Combo 1 bar."):tr(L"Hyper Combo {0} bars.",{std::to_wstring(value)});
   if(value>=3&&previous<3)text+=L" "+meter_ready(3);
   else if(previous==0)text+=L" "+meter_ready(1);
   result.speech=propose(L"hyper-"+std::to_wstring(value),text,Priority::Gauge,s.observed_ms,[this,player,value]{resources_[player].stocks=value;});
@@ -259,8 +310,8 @@ Result Model::update(const Snapshot& s,std::uint64_t now,Request request){
   const bool full=*f.infinity_fraction>=1&&base.full!=std::optional<bool>(true);
   const bool ready=f.infinity_ready==std::optional<bool>(true)&&base.ready!=std::optional<bool>(true);
   if(full||ready){
-   std::wstring text=ready?L"Infinity Storm ready.":L"";
-   if(full)text+=ready?L" Infinity gauge full.":L"Infinity gauge full.";
+   std::wstring text=ready?tr(L"Infinity Storm ready."):L"";
+   if(full){if(ready)text+=L" ";text+=tr(L"Infinity gauge full.");}
    result.speech=propose(L"infinity",text,Priority::Gauge,s.observed_ms,[this,player,full,ready]{
     auto& accepted=resources_[player];if(full)accepted.full=true;if(ready)accepted.ready=true;
    });

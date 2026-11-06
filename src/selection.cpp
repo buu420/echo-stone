@@ -1,4 +1,5 @@
 #include "mvci/selection.hpp"
+#include "mvci/localization.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -9,16 +10,13 @@ namespace {
 constexpr Address engine_rva=0x36bc348,game_setting_rva=0x348cb48,names_rva=0x35cafd0;
 constexpr int tick_active=2,tick_hidden_state=0,max_table=1024;
 constexpr std::uint64_t rescan_ms=500;
-// BP_SelectGem.Initialize builds MT_ArrGemName in this order. The English names are the en/Game.locres
-// strings of PLAYER1_GemType.ArrText (same order). This is narrow coverage: the verified English install.
+// BP_SelectGem.Initialize builds MT_ArrGemName in PLAYER1_GemType.ArrText order.
 constexpr const wchar_t* stone_material[6]{L"MT_Space",L"MT_Power",L"MT_Reality",L"MT_Soul",L"MT_Mind",L"MT_Time"};
-constexpr const wchar_t* stone_english[6]{L"Space Stone",L"Power Stone",L"Reality Stone",L"Soul Stone",L"Mind Stone",L"Time Stone"};
 bool supported(const std::wstring& t){return !t.empty()&&t.rfind(L"msg_",0)!=0;}
 // Button glyph materials /Game/UI/BaseAsset/Platform/<platform>/MI_Btn_<EButtonType> (FC_UI_Object.GetButtonMaterial).
 // Only the letter/shoulder/trigger/stick names are spoken; WD_KCbuttonParts.setupButton itself keys icon size off
 // RS/LS/RT/LT/RB/LB in the material name. Other glyphs (Dir, Sti, SP_L, NA, ...) are atlas cells not decoded here.
 constexpr const wchar_t* glyph_names[10]{L"A",L"B",L"X",L"Y",L"LB",L"RB",L"LT",L"RT",L"LS",L"RS"};
-constexpr const wchar_t* unknown_glyph=L"(button icon)";
 // WD_KeyConf/WD_KeyboardConf.changeFocus_Main and ChangeFocus_Sub: ButtonFocusID -> focused part (main 0..17, sub 20..).
 constexpr const wchar_t* key_main[18]{L"WD_KCbuttonParts5_ToOperation",L"WD_KCbuttonParts_P1",L"WD_KCbuttonParts_K1",L"WD_KCbuttonParts_P2",L"WD_KCbuttonParts_K2",
  L"WD_KCbuttonParts_Stone",L"WD_KCbuttonParts_Change",L"WD_KCbuttonParts2_Burst",L"WD_KCbuttonParts2_P1P2",L"WD_KCbuttonParts2_K1K2",L"WD_KCbuttonParts2_P1K1",
@@ -29,7 +27,7 @@ constexpr const wchar_t* keyboard_sub[10]{L"WD_KCbuttonParts4_AutoCombo",L"WD_KC
 // WD_KeyboardConf.ConvertFocusIDToArrayIndex: ButtonFocusID -> KeyboardConfigData index (-1: row has no key).
 constexpr int keyboard_main_index[18]{-1,4,6,5,7,8,9,14,10,11,12,13,17,16,15,18,-1,-1};
 constexpr int keyboard_sub_index[10]{-1,-1,-1,-1,0,1,2,3,-1,-1};
-const wchar_t* side(int team){return team?L"Player 2":L"Player 1";} // Mod-owned tracking context (F5).
+std::wstring side(int team){return team?tr(L"Player 2"):tr(L"Player 1");} // Mod-owned tracking context (F5).
 void sentence(std::wstring& out,const std::wstring& part){
  if(part.empty())return;
  if(!out.empty()){const wchar_t last=out.back();out+=(last==L'.'||last==L'!'||last==L'?')?L" ":L". ";}
@@ -176,14 +174,14 @@ std::optional<Address> SelectionCapture::parameter(Address material,const wchar_
  return found;
 }
 std::wstring SelectionCapture::glyph(Address image)const{
- const auto resource=brush_resource(image);if(!resource)return unknown_glyph;
+ const auto resource=brush_resource(image);if(!resource)return tr(L"(button icon)");
  std::wstring n=unreal_.name(*resource,true);
- if(unreal_.is_a(*resource,L"MaterialInstanceDynamic")){const auto parent=unreal_.object_field(*resource,L"Parent");if(!parent||!*parent)return unknown_glyph;n=unreal_.name(*parent,true);}
+ if(unreal_.is_a(*resource,L"MaterialInstanceDynamic")){const auto parent=unreal_.object_field(*resource,L"Parent");if(!parent||!*parent)return tr(L"(button icon)");n=unreal_.name(*parent,true);}
  const std::wstring prefix=L"MI_Btn_";
- if(n.rfind(prefix,0)!=0)return unknown_glyph;
+ if(n.rfind(prefix,0)!=0)return tr(L"(button icon)");
  const auto suffix=n.substr(prefix.size());
  for(const auto g:glyph_names)if(suffix==g)return suffix;
- return unknown_glyph;
+ return tr(L"(button icon)");
 }
 std::optional<std::wstring> SelectionCapture::line_text(Address box)const{
  // WD_KeyConfWaiting.SetHorizontalBox fills each box with spawned TextBlocks and button Images (PanelWidget.Slots[i].Content).
@@ -272,7 +270,16 @@ std::optional<std::wstring> SelectionCapture::stone_name(int index,std::uint64_t
    if(arr&&arr->count==6){auto t=unreal_.text(arr->data+static_cast<Address>(index)*24);if(t&&supported(*t))return t;}
   }
  }
- return std::wstring(stone_english[index]);
+ // The focused material proves the visible stone even when the text asset is unavailable.
+ switch(index){
+ case 0:return tr(L"Space Stone");
+ case 1:return tr(L"Power Stone");
+ case 2:return tr(L"Reality Stone");
+ case 3:return tr(L"Soul Stone");
+ case 4:return tr(L"Mind Stone");
+ case 5:return tr(L"Time Stone");
+ default:return {};
+ }
 }
 
 std::optional<MenuSnapshot> SelectionCapture::grid(Address root,Address parent,Address world,int team)const{
@@ -358,7 +365,7 @@ std::optional<MenuSnapshot> SelectionCapture::stone(Address root,Address gem,Add
  if(!w||!*w||unreal_.object_field(*window,L"GemDetail")!=w||!unreal_.is_a(*w,L"WD_GemDetail_C"))return s;
  for(const auto& pair:{std::pair<const wchar_t*,const wchar_t*>{L"TriggerText",L"TriggerEffectText"},{L"PossessionText",L"PossessionEffectText"}}){
   const auto name=rendered_local(*w,pair.first,*w),effect=rendered_local(*w,pair.second,*w);
-  if(name&&effect)sentence(s.value,*name+L": "+*effect);
+  if(name&&effect)sentence(s.value,tr(L"{0}: {1}",{*name,*effect}));
  }
  return s;
 }
@@ -376,8 +383,8 @@ std::optional<MenuSnapshot> SelectionCapture::team_preset(Address root,Address w
   const auto type=portrait(*image);if(!type)continue;
   const auto name=chara_name(*type);if(!name)continue;
   if(!s.value.empty())s.value+=L", ";
-  s.value+=*name;
-  if(const auto color=rendered(*item,color_field))s.value+=L", color "+*color;
+  if(const auto color=rendered(*item,color_field))s.value+=tr(L"{0}, color {1}",{*name,*color});
+  else s.value+=*name;
  }
  if(auto o=unreal_.object(*item))s.identity=(static_cast<std::uint64_t>(static_cast<std::uint32_t>(o->serial))<<32)|static_cast<std::uint32_t>(o->index);
  return s;
@@ -482,7 +489,7 @@ std::optional<MenuSnapshot> SelectionCapture::chara(Address root,Address world,i
  // Battle settings take the main side's input while open (BP_CharaSelectMain.SendInputCheck_CharaSelectMain).
  if(unreal_.boolean(root,L"BattleSettingActive")==std::optional<bool>(true))return battle(root,world,team);
  // Input_ArrObj[team] is the object receiving that side's input; its class is the phase.
- const auto owner=element(root,L"Input_ArrObj",team,8);if(!owner||!*owner)return reject(std::wstring(L"chara: no input owner for ")+side(team));
+ const auto owner=element(root,L"Input_ArrObj",team,8);if(!owner||!*owner)return reject(team?L"chara: no input owner for Player 2":L"chara: no input owner for Player 1");
  if(*owner==*parent)return grid(root,*parent,world,team);
  if(unreal_.is_a(*owner,L"WD_Menu_Con_C"))return costume(root,*owner,team);
  if(unreal_.is_a(*owner,L"BP_SelectGem_C"))return stone(root,*owner,world,team,now);
@@ -519,7 +526,8 @@ std::optional<MenuSnapshot> SelectionCapture::controller(Address root)const{
   if(!*symbol||!unreal_.is_a(*symbol,L"WD_CtrlSymbol0_C")||!widget_shown(*symbol))continue;
   const auto pad=int_element(root,L"ConnectPadNoArray",i,8);if(!pad||*pad<0)continue;
   const auto name=rendered(*symbol,L"UserName");if(!name)continue; // Connected but unnamed: not labelled here.
-  sentence(label,*name+L": "+(*slot0==i?*left:*slot1==i?*right:std::wstring(L"center")));
+  const auto placement=*slot0==i?*left:*slot1==i?*right:tr(L"center");
+  sentence(label,tr(L"{0}: {1}",{*name,placement}));
  }
  if(label.empty())return {};
  MenuSnapshot s;s.valid=true;s.label=label;

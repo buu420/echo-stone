@@ -1,3 +1,4 @@
+#include "mvci/localization.hpp"
 #include "widget_geometry.hpp"
 
 namespace mvci {
@@ -106,12 +107,12 @@ std::optional<std::wstring> total_text(Frame& frame, Address total, int side) {
  // SetResultType updates this brush. The inspected atlas has these three words.
  if (!player || !art || !frame.shown(*art) || !result || *result < 0 || *result > 2 ||
      !asset(frame, frame.image_resource(*art), L"MaterialInstanceConstant", score_parts, materials[*result])) return {};
- std::wstring text = *player + L". " + labels[*result];
+ std::wstring text = tr(L"{0}. {1}", {*player, tr(labels[*result])});
  for (const auto& pair : {std::pair{L"Text_Win", L"Text_WinNum"}, std::pair{L"Text_Lose", L"Text_LoseNum"},
                           std::pair{L"Text_Draw", L"Text_DrawNum"}}) {
   const auto label = visible_text(frame, total, pair.first), count = visible_text(frame, total, pair.second);
   if (!label || !count) return {};
-  text += L". " + *label + L" " + *count;
+  text = tr(L"{0}. {1} {2}", {text, *label, *count});
  }
  return text;
 }
@@ -126,8 +127,8 @@ std::optional<std::wstring> totals(Frame& frame, Address result) {
   if (!frame.shown(*total)) continue;
   const auto section = total_text(frame, *total, i);
   if (!section) return {};
-  if (text.empty()) text = L"Results";
-  text += L". " + *section;
+  if (text.empty()) text = tr(L"Results. {0}", {*section});
+  else text = tr(L"{0}. {1}", {text, *section});
  }
  return text;
 }
@@ -152,7 +153,9 @@ StoryTextSnapshot winner(Frame& frame, Address result, bool arcade_clear) {
  if (!main || !sub) return {};
  // Arcade clear plays the native SYS_NA congratulations cue. Its graphic
  // gates the two names while that audio supplies the congratulation.
- return snapshot(frame, *announcement, std::wstring(congrats ? L"Arcade team. " : L"Winner. ") + *main + L". " + *sub);
+ const auto text = congrats ? tr(L"Arcade team. {0}. {1}", {*main, *sub}) :
+                              tr(L"Winner. {0}. {1}", {*main, *sub});
+ return snapshot(frame, *announcement, text);
 }
 
 StoryTextSnapshot fight_result(Frame& frame, Address flow, Address world, bool arcade) {

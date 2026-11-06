@@ -1,4 +1,5 @@
 #include "mvci/story.hpp"
+#include "mvci/localization.hpp"
 #include "story_read.hpp"
 #include <cmath>
 namespace mvci {
@@ -24,12 +25,12 @@ std::optional<MenuSnapshot> continue_menu(Frame& f,Address flow,Address world){
  const auto image=f.field(*w,L"Image_Continue");if(!image||!*image||!f.within(*image,*w)||!f.shown(*image)||!asset(f,*image,L"M_ContinueText",L"Material"))return blocked;
  const auto yes=f.text(*w,L"TextBlock_YES"),no=f.text(*w,L"TextBlock_NO");const auto hints=f.hints(*w,false);
  if(!yes||!no||!story_detail::readable(*yes)||!story_detail::readable(*no)||hints.empty()||!f.finish())return blocked;
- MenuSnapshot out;out.valid=true;out.modal=true;out.identity=identity(*f.u.object(*w));out.label=L"Continue";out.value=*yes+L". "+*no;out.help=hints;return out;
+ MenuSnapshot out;out.valid=true;out.modal=true;out.identity=identity(*f.u.object(*w));out.label=tr(L"Continue");out.value=tr(L"{0}. {1}",{*yes,*no});out.help=hints;return out;
 }
 std::optional<StoryTextSnapshot> game_over(Frame& f,Address flow,Address world){
  if(!current(f,flow,world))return {};const auto w=f.field(flow,L"GameOver_Obj");if(!w||!*w||!f.u.is_a(*w,L"WD_GameOver_C")||!f.active(*w)||!f.shown(*w))return {};
  const auto image=f.field(*w,L"Image_GameOver");if(!image||!*image||!f.within(*image,*w)||!f.shown(*image)||!asset(f,*image,L"TEX_GameOver",L"Texture2D")||!f.finish())return {};
- return text_result(f.u,*w,L"Game over");
+ return text_result(f.u,*w,tr(L"Game over"));
 }
 std::optional<StoryTextSnapshot> thanks(Frame& f,Address flow,Address world){
  if(!current(f,flow,world))return {};const auto w=f.field(flow,L"Thanks_Obj");if(!w||!*w||!f.u.is_a(*w,L"WD_Thanks_C")||!f.active(*w)||!f.shown(*w))return {};
@@ -37,10 +38,11 @@ std::optional<StoryTextSnapshot> thanks(Frame& f,Address flow,Address world){
  const auto color=f.u.property(*image,L"ColorAndOpacity");if(!color||color->kind!=L"StructProperty"||color->size!=16)return {};
  const auto alpha=f.get<float>(*image+static_cast<Address>(color->offset)+12);if(!alpha||!std::isfinite(*alpha)||*alpha<=0||*alpha>1)return {};
  const auto resource=f.image_resource(*image);if(!resource||!f.u.is_a(*resource,L"Texture2D")||!f.u.name_is(*resource,L"tex_thanks_text"))return {};
- const auto package=f.get<Address>(*resource+0x20);if(!package||!*package||!f.retain(*package)||!f.u.is_a(*package,L"Package")||!f.u.name_is(*package,L"/Game/UI/Story/Parts/tex_thanks_text")||!f.finish())return {};
- // Literal text independently inspected in the shipped base texture. Localized
- // replacement images require their own mapping; no Story progress is queried.
- return text_result(f.u,*w,L"Thank you for playing.");
+ const auto package=f.get<Address>(*resource+0x20);if(!package||!*package||!f.retain(*package)||!f.u.is_a(*package,L"Package"))return {};
+ const bool simplified=f.u.name_is(*package,L"/Game/L10N/zh-Hans/UI/Story/Parts/tex_thanks_text");
+ if((!simplified&&!f.u.name_is(*package,L"/Game/UI/Story/Parts/tex_thanks_text"))||!f.finish())return {};
+ // The decoded base and Simplified Chinese textures establish these words.
+ return text_result(f.u,*w,simplified?L"感谢您的游玩":tr(L"Thank you for playing."));
 }
 std::optional<StoryTextSnapshot> one_point(Frame& f,Address flow,Address world){
  if(!current(f,flow,world))return {};const auto w=f.field(flow,L"OnePoint");if(!w||!*w||!f.u.is_a(*w,L"WD_OnePoint_C")||!f.active(*w)||!f.shown(*w))return {};
@@ -87,7 +89,7 @@ std::optional<MenuSnapshot> document(Frame& f,Address w){
   const auto buff=f.field(*d,field);if(!buff||!*buff||!f.u.is_a(*buff,L"WD_BuffListNew_C")||!f.within(*buff,*d)||!f.shown(*buff))continue;
   for(auto name:{L"TextBlock_ChrName",L"TextBlock_00",L"TextBlock_01",L"TextBlock_02"})if(const auto value=f.text(*buff,name);value&&story_detail::readable(*value))append(text,*value);
  }
- if(text.empty()||!f.finish())return out;out.valid=true;out.blocked=false;out.identity=identity(*f.u.object(w));out.screen=L"Story pause";out.label=text;
+ if(text.empty()||!f.finish())return out;out.valid=true;out.blocked=false;out.identity=identity(*f.u.object(w));out.screen=tr(L"Story pause");out.label=text;
  if(const auto common=f.field(w,L"WD_PauseCommon");common&&*common&&f.within(*common,w)&&f.shown(*common)){
   if(const auto title=f.text(*common,L"TextBlock_Caption");title&&story_detail::readable(*title))out.screen=*title;
   if(const auto guide=f.field(*common,L"WD_BtnNavi_88");guide&&*guide&&f.within(*guide,*common)&&f.shown(*guide))out.help=f.hints(*guide,true);

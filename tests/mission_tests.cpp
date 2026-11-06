@@ -124,7 +124,7 @@ static void bounds_hidden_labels_and_selected_chips_are_required(){
 }
 static void designer_templates_and_incomplete_details_never_speak(){
  Fixture f;Mission m(f);auto name=m.field(m.rows[0][0],L"TextBlock_CharName"),clear=m.field(m.rows[0][0],L"TextBlock_Clear");
- for(auto text:{L"",L"msg_sys_mis_0000",L"Text Block"}){f.text(name+0x140,text);CHECK(!read(f).valid);}f.text(name+0x140,L"RYU");
+ for(auto text:{L"",L"msg_sys_mis_0000",L"Text Block",L"Bloque de texto",L"テキストブロック",L"텍스트 블록",L"Bloco de Texto"}){f.text(name+0x140,text);CHECK(!read(f).valid);}f.text(name+0x140,L"RYU");
  for(auto text:{L"CLEARED X",L"CLEARED 0"}){f.text(clear+0x140,text);CHECK(!read(f).valid);}f.text(clear+0x140,L"Completed: 0/10");
  auto popup=m.popup();f.text(m.field(popup,L"TextBlock_Number")+0x140,L"MISSION X");CHECK(!read(f).valid);f.text(m.field(popup,L"TextBlock_Number")+0x140,L"MISSION 1");
  f.text(m.field(popup,L"TextBlock_Spec")+0x140,L"Mission Data\r\nMission Data\r\nMission Data");CHECK(!read(f).valid);f.text(m.field(popup,L"TextBlock_Spec")+0x140,L"Perform special moves.");CHECK(read(f).valid);

@@ -62,7 +62,7 @@ def build(root, output):
         if relative.endswith((".dll", ".asi")) and not x64(data):
             raise ValueError(f"Not a native x64 artifact: {source}")
         payload[relative] = data
-    version = "0.1.0"
+    version = "0.1.1"
     manifest = dict(format=1, product="MVCIAccess", version=version, game_sha256=GAME_HASH, files=[])
     for relative, data in sorted(payload.items()):
         path = output / "payload" / relative
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument("--amethyst", action="store_true")
     args = parser.parse_args()
     source = Path(__file__).resolve().parent.parent
-    output = args.output or source / "artifacts/EchoStone-0.1.0-Windows"
+    output = args.output or source / "artifacts/EchoStone-0.1.1-Windows"
     portable = build(source, output)
     if args.amethyst:
         build_amethyst(source, output, portable)

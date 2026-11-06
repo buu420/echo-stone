@@ -1,4 +1,5 @@
 #pragma once
+#include "mvci/localization.hpp"
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -55,6 +56,7 @@ struct Snapshot {
  MenuSnapshot menu;
  CombatSnapshot combat;
  StorySnapshot story;
+ Language language=Language::English;
 };
 enum class Request { None, SelectPlayer, ToggleBeacon, ReadCombat, ReadMenu, ToggleSide, ToggleDescriptions };
 enum class Priority { Gauge=50, Storm=60, Side=70, Story=80, Menu=90, Manual=100 };
@@ -65,6 +67,7 @@ class Model {
  struct HealthBase {int fighter,band;};
  struct Pending {Speech speech;std::wstring key;std::function<void()> commit;std::uint64_t sampled=0;};
  std::optional<Pending> pending_;
+ Language language_=Language::English;
  Request pending_request_=Request::None;
  std::wstring accepted_menu_;
  std::array<std::wstring,6> accepted_story_;
@@ -78,6 +81,7 @@ class Model {
  bool side_announcements_=true;
  bool descriptions_=true;
  static std::optional<HealthBase> health_base(const FighterSnapshot&);
+ std::wstring control_confirmation(Request)const;
  Speech propose(std::wstring,std::wstring,Priority,std::uint64_t,std::function<void()>,std::wstring source_menu={});
 public:
  Result update(const Snapshot&,std::uint64_t now,Request request=Request::None);

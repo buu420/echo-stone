@@ -4,8 +4,21 @@ Echo Stone adds screen-reader access to **Marvel vs. Capcom: Infinite** for
 blind players. It uses Prism for menus and prompts and provides combat cues,
 health and gauge announcements, and recorded Story descriptions.
 
-This English beta supports the Windows x64 Steam build 18789511.
-[Download Echo Stone 0.1.0](https://github.com/buu420/echo-stone/releases/tag/v0.1.0).
+This beta supports the Windows x64 Steam build 18789511.
+[Published releases](https://github.com/buu420/echo-stone/releases).
+
+## Game language
+
+Echo Stone follows the language the game loads. Native menu text and subtitles
+come from the game. Echo Stone translates its own labels, command icon
+descriptions, and combat announcements. The language list includes English,
+Arabic, French, German, Italian, Japanese, Korean, Polish, Brazilian Portuguese,
+Russian, Spanish for Spain and Latin America, Thai, and Simplified and
+Traditional Chinese.
+
+Choose a suitable voice in your screen reader. The recorded Story descriptions
+are in English, and F10 controls their playback. The translations are beta
+wording and still need live listening and native-speaker review.
 
 | Key | Action |
 | --- | --- |
@@ -54,8 +67,8 @@ drawn objective. Press F8 during the Mission for the objective and the currently
 visible command rows, including move icons and the highlighted command.
 
 Story reads visible location/date cards, loading and advice text, pause actions,
-win and character conditions, Continue actions, Game Over, and the mapped English
-Thank You screen. The Command List in the pause menu reads the current fighter,
+win and character conditions, Continue actions, Game Over, and the mapped English and Simplified Chinese
+Thank You screens. The Command List in the pause menu reads the current fighter,
 fully visible rows, move icons, and scroll cues. F7 requests
 only the enemy/time digits or infinity symbol actually drawn on the Story HUD.
 These extra HUD reads run on demand. F8 can repeat the currently displayed
@@ -92,7 +105,7 @@ still need an in-game listening check.
 
 ### Windows ZIP
 
-1. Close MVC Infinite normally and extract `EchoStone-0.1.0-Windows.zip`.
+1. Close MVC Infinite normally and extract `EchoStone-0.1.1-Windows.zip`.
 2. Run `Install-EchoStone.cmd` in the extracted folder. It finds the Steam
    game folder and installs the mod automatically.
 3. Start your screen reader and launch MVC Infinite through Steam.
@@ -114,8 +127,7 @@ Removal preserves edited files, shared loaders, logs, backups, saves and setting
 ### Amethyst Accessibility Mod Manager
 
 With the game closed, find **Echo Stone** under **Marvel vs. Capcom: Infinite**
-in the [buu420 catalog](https://github.com/buu420/buu-s-mods) and choose the
-0.1.0 beta. The manager asks for consent to a read-only compatibility check
+in the [buu420 catalog](https://github.com/buu420/buu-s-mods). The manager asks for consent to a read-only compatibility check
 before it installs the files. Remove a previous standalone install with its
 uninstaller before switching to Amethyst. If that uninstaller reports
 preserved files, use the Windows ZIP until the ownership conflict is resolved.
@@ -124,7 +136,8 @@ Close the game before installing, updating, or removing the mod.
 ## Troubleshooting
 
 Diagnostic log: `MVCI\Binaries\Win64\scripts\MVCIAccess\reader.log` beneath
-the game folder. `SPEAK accepted=1` means Prism accepted a line. For Story speech,
+the game folder. `LANG` records the game culture used for mod speech.
+`SPEAK accepted=1` means Prism accepted a line. For Story speech,
 `ACK` distinguishes backend acceptance from the mod remembering that line.
 Hearing the line is a separate check. Unsupported game updates
 disable native capture and are announced when Prism is available.

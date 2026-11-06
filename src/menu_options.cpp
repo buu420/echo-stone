@@ -1,4 +1,5 @@
 #include "story_read.hpp"
+#include "mvci/localization.hpp"
 
 namespace mvci {
 namespace {
@@ -77,7 +78,7 @@ std::optional<std::wstring> slider_value(Frame& frame, Address row) {
  const auto fraction = frame.get<float>(*fill + static_cast<Address>(x->offset));
  const auto height = frame.get<float>(*fill + static_cast<Address>(y->offset));
  if (!fraction || !std::isfinite(*fraction) || *fraction < 0 || *fraction > 1 || height != std::optional<float>(1.f)) return {};
- return std::to_wstring(std::lround(*fraction * 100.f)) + L" percent";
+ return tr(L"{0} percent", {std::to_wstring(std::lround(*fraction * 100.f))});
 }
 
 std::optional<std::wstring> option_value(Frame& frame, Address row, OptionValue kind) {
@@ -87,7 +88,7 @@ std::optional<std::wstring> option_value(Frame& frame, Address row, OptionValue 
  if (!text || kind != OptionValue::Radio) return text;
  const auto marker = attached_widget(frame, row, L"Image_Radio", L"Image");
  if (!marker) return {};
- if (frame.shown(*marker)) append(*text, L"Selected");
+ if (frame.shown(*marker)) append(*text, tr(L"Selected"));
  return text;
 }
 }

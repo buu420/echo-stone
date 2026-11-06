@@ -2,6 +2,7 @@
 #include <MinHook.h>
 #include "mvci/beacon.hpp"
 #include "mvci/combat.hpp"
+#include "mvci/game_language.hpp"
 #include "mvci/collection.hpp"
 #include "mvci/mission.hpp"
 #include "mvci/story.hpp"
@@ -76,7 +77,10 @@ void __fastcall event_hook(void* object,void* function,void* parameters){
  const auto now=GetTickCount64();auto stage_at=begin;
  const auto stage=[&](std::size_t index){const auto at=capture_clock();state->capture_phase_us[index].fetch_add(at-stage_at,std::memory_order_relaxed);stage_at=at;};
  try{
-  mvci::Snapshot snapshot;const bool ready=state->unreal.prepare_capture(now);stage(0);
+  mvci::Snapshot snapshot;
+  snapshot.language=mvci::read_game_language(state->memory,state->base).value_or(mvci::Language::English);
+  const mvci::LanguageScope language(snapshot.language);
+  const bool ready=state->unreal.prepare_capture(now);stage(0);
   if(ready)snapshot.menu=state->menus.sample(now);stage(1);
   if(ready&&!snapshot.menu.valid&&!snapshot.menu.blocked)snapshot.menu=state->collection.sample(now);stage(2);
   const auto hud_ticket=state->hud_requested.load(std::memory_order_acquire);
@@ -108,22 +112,27 @@ DWORD worker_impl(){
  const auto self_path=std::filesystem::path(module_path(self_module));const auto data_dir=self_path.parent_path()/L"MVCIAccess";
  std::error_code ec;std::filesystem::create_directories(data_dir,ec);
  auto* state=new State(reinterpret_cast<mvci::Address>(GetModuleHandleW(nullptr)),data_dir);
- state->log("Echo Stone 0.1.0 starting; shared incremental discovery and completion-paced capture; F5 player/F6 beacon/F7 status/F8 menu/F9 side/F10 descriptions; distance, side and descriptions default on; Story HUD read only on F7 demand");
+ state->log("Echo Stone 0.1.1 starting; shared incremental discovery and completion-paced capture; F5 player/F6 beacon/F7 status/F8 menu/F9 side/F10 descriptions; distance, side and descriptions default on; Story HUD read only on F7 demand");
  mvci::Prism prism;
  const auto prism_path=(data_dir/L"prism.dll").wstring();
  if(mvci::sha256_file(prism_path)!= "402cc717d01b8b6574adbcb7a1627d30c078061d6be2b9664958f661ea0aec75"){state->log("ERROR Prism dependency hash mismatch");return 1;}
  bool speech=prism.open(prism_path);if(speech)state->log("Prism backend "+prism.backend_name());
  if(mvci::sha256_file(module_path(GetModuleHandleW(nullptr)))!=mvci::supported_game_sha256){state->log("ERROR Unsupported executable; no hooks installed");if(speech)prism.speak(L"Echo Stone does not support this MVC Infinite build.");return 2;}
+ const auto speak_attach_failure=[&]{
+  if(!speech)return;
+  const mvci::LanguageScope language(mvci::read_game_language(state->memory,state->base).value_or(mvci::Language::English));
+  prism.speak(mvci::tr(L"Echo Stone could not attach to the game."));
+ };
  // The eager compatibility loader only starts this worker. A real Unreal window
  // proves the protected bootstrap has reached the game; exact bytes are checked
  // again here, so no hook can race the earlier text-decoding phase.
  const auto deadline=GetTickCount64()+120000;DWORD initial_ui_thread=0;
  while(!stopping.load()&&GetTickCount64()<deadline){initial_ui_thread=game_window_thread();if(mvci::ready_for_hook(state->memory,state->base,initial_ui_thread))break;Sleep(20);}
- if(!mvci::ready_for_hook(state->memory,state->base,initial_ui_thread)){state->log("ERROR Game window or native UI code is not ready; no hooks installed");if(speech)prism.speak(L"Echo Stone could not attach to the game.");return 3;}
+ if(!mvci::ready_for_hook(state->memory,state->base,initial_ui_thread)){state->log("ERROR Game window or native UI code is not ready; no hooks installed");speak_attach_failure();return 3;}
  HMODULE pinned=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,reinterpret_cast<LPCWSTR>(self_module),&pinned);
  state->ui_thread=initial_ui_thread;active.store(state,std::memory_order_release);
  const auto hook_init=MH_Initialize();
- if((hook_init!=MH_OK&&hook_init!=MH_ERROR_ALREADY_INITIALIZED)||MH_CreateHook(reinterpret_cast<void*>(state->base+mvci::process_event_rva),reinterpret_cast<void*>(&event_hook),reinterpret_cast<void**>(&state->original))!=MH_OK||MH_EnableHook(reinterpret_cast<void*>(state->base+mvci::process_event_rva))!=MH_OK){state->log("ERROR Cannot install the verified native UI hook");if(speech)prism.speak(L"Echo Stone could not attach to the game.");return 4;}
+ if((hook_init!=MH_OK&&hook_init!=MH_ERROR_ALREADY_INITIALIZED)||MH_CreateHook(reinterpret_cast<void*>(state->base+mvci::process_event_rva),reinterpret_cast<void*>(&event_hook),reinterpret_cast<void**>(&state->original))!=MH_OK||MH_EnableHook(reinterpret_cast<void*>(state->base+mvci::process_event_rva))!=MH_OK){state->log("ERROR Cannot install the verified native UI hook");speak_attach_failure();return 4;}
  state->log("Verified x64 ProcessEvent hook active; capture only after the outermost event on the game window thread");
  mvci::Model model;mvci::Controls controls;mvci::BeaconAudio audio;mvci::SpeechGate delivery;mvci::StatusCaptureGate status_capture;std::uint64_t audio_epoch=0;mvci::DescriptionAudio descriptions(data_dir.wstring(),[state,&audio_epoch]{std::lock_guard<std::mutex> lock(state->mutex);return state->revision==audio_epoch&&focused();});
  std::uint64_t retry_at=0,window_at=0,diagnostics_at=0;bool introduced=false,was_foreground=false;
@@ -132,6 +141,7 @@ DWORD worker_impl(){
  std::string previous_story_phase;
  std::string previous_loading_state;
  std::string previous_description;
+ std::optional<mvci::Language> previous_language;
  while(!stopping.load()){
   const auto now=GetTickCount64();
   if(now>=window_at){state->ui_thread=game_window_thread();window_at=now+500;}
@@ -142,6 +152,12 @@ DWORD worker_impl(){
   // on the worker and only runs when a reason changes; it cannot block capture.
   for(int team=0;team<2;++team)if(rejections[team]!=previous_rejections[team]){previous_rejections[team]=rejections[team];if(!rejections[team].empty())state->log("SELECT unavailable requested_player="+std::to_string(team+1)+" reason="+utf8(rejections[team]));}
   const auto sampled_now=GetTickCount64();const bool fresh=foreground&&sampled_now>=snapshot.observed_ms&&sampled_now-snapshot.observed_ms<=250;
+  const mvci::LanguageScope language(snapshot.language);
+  if(fresh&&previous_language!=snapshot.language){
+   if(previous_language){prism.stop();delivery.reset();}
+   previous_language=snapshot.language;
+   state->log("LANG "+utf8(std::wstring(mvci::language_tag(snapshot.language))));
+  }
   audio_epoch=revision;descriptions.prepare(snapshot,sampled_now,model.descriptions_enabled());snapshot.story.captions[5]=descriptions.notice(snapshot,model.descriptions_enabled());
   if(fresh){
    const auto& movie=snapshot.story.movie;const auto phase=movie.valid?(movie.paused?"movie_paused":movie.playing?"movie_playing":"movie_prepared"):snapshot.story.captions[3].valid?"loading":snapshot.combat.playable?"combat_playable":snapshot.combat.valid?"combat_present":"other";
@@ -215,7 +231,7 @@ DWORD worker_impl(){
    }
    if(!delivery.allowed(result.speech->priority,GetTickCount64(),speaking)){model.acknowledge(result.speech->token,false,GetTickCount64());Sleep(20);continue;}
    bool current=true;{std::lock_guard<std::mutex> lock(state->mutex);current=state->revision==revision;}
-   auto text=result.speech->text;if(!introduced)text=L"Echo Stone. Tracking Player "+std::to_wstring(model.player()+1)+L". "+text;
+   auto text=result.speech->text;if(!introduced)text=L"Echo Stone. "+mvci::tr(L"Tracking Player {0}.",{std::to_wstring(model.player()+1)})+L" "+text;
    const bool available=speech&&current&&focused();const auto submitted_at=GetTickCount64();
    const bool attempted=available&&model.submission_fresh(result.speech->token,submitted_at);
    const bool accepted=attempted&&prism.speak(text,true);const auto completed_at=GetTickCount64();
