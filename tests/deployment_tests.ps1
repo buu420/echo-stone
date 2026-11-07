@@ -87,6 +87,23 @@ try{
  Assert-Task (Test-Path -LiteralPath (Join-Path $taskGame ($script:MVCIBin+'scripts\MVCIAccess\descriptions\opening-001.wav'))) 'Story voice clip missing.'
  Assert-Task ((Get-MVCIHash $taskExe) -eq $script:taskGameHash) 'Original executable changed.'
  Assert-Task ([IO.File]::ReadAllText($taskSave) -eq 'save sentinel') 'Save changed.'
+ # A managed install masks the standalone receipt until Amethyst restores it.
+ $taskOverlayReceipt=Join-Path $taskGame 'MVCIAccess.install.json'
+ $taskStandaloneReceipt=[IO.File]::ReadAllBytes($taskOverlayReceipt)
+ try {
+  [IO.File]::WriteAllText($taskOverlayReceipt,'{"format":0,"product":"MVCIAccess","managed_by":"Amethyst"}')
+  $taskMarkerHash=Get-MVCIHash $taskOverlayReceipt
+  $taskManagedPlugin=Join-Path $taskGame ($script:MVCIBin+'scripts\MVCIAccess.asi')
+  $taskManagedPluginHash=Get-MVCIHash $taskManagedPlugin
+  Expect-TaskFailure {
+   Install-MVCIAccess -GameRoot $taskGame -PackageRoot $taskPkg -ExpectedGameHash $script:taskGameHash
+  } 'managed by Amethyst'
+  Expect-TaskFailure { Uninstall-MVCIAccess -GameRoot $taskGame } 'managed by Amethyst'
+  Assert-Task ((Get-MVCIHash $taskOverlayReceipt) -eq $taskMarkerHash) 'Standalone command changed the Amethyst receipt.'
+  Assert-Task ((Get-MVCIHash $taskManagedPlugin) -eq $taskManagedPluginHash) 'Standalone command changed the Amethyst plugin.'
+ } finally {
+  [IO.File]::WriteAllBytes($taskOverlayReceipt,$taskStandaloneReceipt)
+ }
  # Identical reinstall is safe only with a verified ownership receipt.
  Install-MVCIAccess -GameRoot $taskGame -PackageRoot $taskPkg -ExpectedGameHash $script:taskGameHash|Out-Null
  $taskPlugin=Join-Path $taskGame ($script:MVCIBin+'scripts\MVCIAccess.asi');[IO.File]::AppendAllText($taskPlugin,'user change')

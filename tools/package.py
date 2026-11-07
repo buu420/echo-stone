@@ -8,6 +8,13 @@ import zipfile
 import sys
 from pathlib import Path
 
+VERSION = "0.1.2"
+INSTALL_RECEIPT = "MVCIAccess.install.json"
+# Fingerprints of the receipts from the published Windows ZIPs.
+STANDALONE_RECEIPTS = {
+    "0.1.0": "57669d7a0c90d754bde8779ff7942a600d0c6f854b57444a80d64d54919fe0ca",
+    "0.1.1": "f32c10b9ce058acd8409c97e036a7bb79e60664c61ffbc1f03004f33e788c906",
+}
 GAME_HASH = "ccf02d07677f259165cc8830eba0fcfaeea32f70c756871735e7188c367be2e6"
 BIN = "MVCI/Binaries/Win64/"
 MOD = BIN + "scripts/MVCIAccess/"
@@ -62,8 +69,7 @@ def build(root, output):
         if relative.endswith((".dll", ".asi")) and not x64(data):
             raise ValueError(f"Not a native x64 artifact: {source}")
         payload[relative] = data
-    version = "0.1.1"
-    manifest = dict(format=1, product="MVCIAccess", version=version, game_sha256=GAME_HASH, files=[])
+    manifest = dict(format=1, product="MVCIAccess", version=VERSION, game_sha256=GAME_HASH, files=[])
     for relative, data in sorted(payload.items()):
         path = output / "payload" / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -116,25 +122,37 @@ def build(root, output):
     print(json.dumps(dict(package=str(output), archive=str(archive), files=len(payload), archive_sha256=sha(archive.read_bytes())), indent=2))
     return manifest
 
+def receipt_fingerprint(receipt):
+    header = "|".join(str(receipt[field]) for field in ("format", "product", "version", "game_sha256"))
+    records = sorted(f"{file['path']}|{file['size']}|{file['sha256']}" for file in receipt["files"])
+    return sha("\n".join([header, *records]).encode("utf-8"))
+
 def build_amethyst(root, output, portable):
     version = portable["version"]
     archive = output.parent / f"EchoStone-{version}-Amethyst.zip"
-    checks = [
+    payload_checks = [
         dict(type="hashEquals", path=f["path"].replace("\\", "/"), sha256=f["sha256"])
         for f in portable["files"]
     ]
     check_script = "files/Check-EchoStoneInstall.ps1"
+    managed_receipt = b'{"format":0,"product":"MVCIAccess","managed_by":"Amethyst"}\n'
+    receipt_check = dict(type="hashEquals", path=INSTALL_RECEIPT, sha256=sha(managed_receipt))
+    checks = [receipt_check, *payload_checks]
+    known_receipts = {**STANDALONE_RECEIPTS, version: receipt_fingerprint(portable)}
     manifest = {
         "pluginId": "buu420",
         "gameId": "marvel-vs-capcom-infinite",
         "modVersion": version,
         "targetPlatform": "windows",
-        "installActions": [{"type": "copyFolder", "sourceDir": "MVCI", "targetDir": "MVCI"}],
+        "installActions": [
+            {"type": "copyFile", "source": INSTALL_RECEIPT, "target": INSTALL_RECEIPT},
+            {"type": "copyFolder", "sourceDir": "MVCI", "targetDir": "MVCI"},
+        ],
         "verify": checks,
         "preInstall": {
             "executable": check_script,
-            "what": "Check the game build, running game process and existing loader files.",
-            "why": "Echo Stone needs the supported Steam executable and compatible loader files.",
+            "what": "Check the Steam build, running game process, loader and any standalone Echo Stone install.",
+            "why": "Amethyst can install over a verified Windows ZIP copy and restore it on uninstall.",
             "modifies": "Read-only compatibility check.",
             "needsAdmin": False,
             "failureFatal": True,
@@ -146,7 +164,10 @@ def build_amethyst(root, output, portable):
     with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as zipped:
         zipped.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
         zipped.write(root / "tools/Check-EchoStoneInstall.ps1", check_script)
-        for check in checks:
+        zipped.write(root / "tools/Deployment.Common.ps1", "files/Deployment.Common.ps1")
+        zipped.writestr("files/EchoStone-standalone-receipts.json", json.dumps(known_receipts, indent=2) + "\n")
+        zipped.writestr("files/" + INSTALL_RECEIPT, managed_receipt)
+        for check in payload_checks:
             relative = check["path"]
             zipped.write(output / "payload" / relative, "files/" + relative)
     with zipfile.ZipFile(archive) as zipped:
@@ -164,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("--amethyst", action="store_true")
     args = parser.parse_args()
     source = Path(__file__).resolve().parent.parent
-    output = args.output or source / "artifacts/EchoStone-0.1.1-Windows"
+    output = args.output or source / f"artifacts/EchoStone-{VERSION}-Windows"
     portable = build(source, output)
     if args.amethyst:
         build_amethyst(source, output, portable)

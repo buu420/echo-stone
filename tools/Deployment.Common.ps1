@@ -285,6 +285,10 @@ function Get-MVCISafePath([string]$Root,[string]$Relative){
 function Get-MVCIOwnedPath([string]$Root,[string]$Relative){if($Relative -notin $script:MVCIOwned){throw 'Unexpected owned-file location.'};Get-MVCISafePath $Root $Relative}
 function Get-MVCIHash([string]$Path){$taskStream=[IO.File]::OpenRead($Path);$taskHash=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($taskHash.ComputeHash($taskStream)).Replace('-','').ToLowerInvariant()}finally{$taskStream.Dispose();$taskHash.Dispose()}}
 function Test-MVCIManifest([string]$Root,$Manifest){
+ if ($Manifest.format -eq 0 -and $Manifest.product -eq 'MVCIAccess' -and
+     $Manifest.PSObject.Properties['managed_by'] -and $Manifest.managed_by -eq 'Amethyst') {
+  throw 'Echo Stone is managed by Amethyst. Use Amethyst to update or remove it.'
+ }
  if($Manifest.format -ne 1 -or $Manifest.product -ne 'MVCIAccess' -or !$Manifest.version -or $Manifest.game_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or !$Manifest.files){throw 'Unrecognized MVCIAccess manifest.'}
  $taskSeen=@{};foreach($taskRecord in $Manifest.files){$null=Get-MVCIOwnedPath $Root $taskRecord.path;if($taskSeen.ContainsKey($taskRecord.path)){throw 'Duplicate owned-file record.'};$taskSeen[$taskRecord.path]=$true;if($taskRecord.sha256 -notmatch '^[a-fA-F0-9]{64}$' -or $taskRecord.size -lt 0 -or $taskRecord.size -gt 33554432){throw 'Invalid owned-file record.'}}
 }

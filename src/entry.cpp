@@ -112,7 +112,7 @@ DWORD worker_impl(){
  const auto self_path=std::filesystem::path(module_path(self_module));const auto data_dir=self_path.parent_path()/L"MVCIAccess";
  std::error_code ec;std::filesystem::create_directories(data_dir,ec);
  auto* state=new State(reinterpret_cast<mvci::Address>(GetModuleHandleW(nullptr)),data_dir);
- state->log("Echo Stone 0.1.1 starting; shared incremental discovery and completion-paced capture; F5 player/F6 beacon/F7 status/F8 menu/F9 side/F10 descriptions; distance, side and descriptions default on; Story HUD read only on F7 demand");
+ state->log("Echo Stone 0.1.2 starting; shared incremental discovery and completion-paced capture; F5 player/F6 beacon/F7 status/F8 menu/F9 side/F10 descriptions; distance, side and descriptions default on; Story HUD read only on F7 demand");
  mvci::Prism prism;
  const auto prism_path=(data_dir/L"prism.dll").wstring();
  if(mvci::sha256_file(prism_path)!= "402cc717d01b8b6574adbcb7a1627d30c078061d6be2b9664958f661ea0aec75"){state->log("ERROR Prism dependency hash mismatch");return 1;}

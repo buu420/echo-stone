@@ -105,7 +105,7 @@ still need an in-game listening check.
 
 ### Windows ZIP
 
-1. Close MVC Infinite normally and extract `EchoStone-0.1.1-Windows.zip`.
+1. Close MVC Infinite normally and extract `EchoStone-0.1.2-Windows.zip`.
 2. Run `Install-EchoStone.cmd` in the extracted folder. It finds the Steam
    game folder and installs the mod automatically.
 3. Start your screen reader and launch MVC Infinite through Steam.
@@ -127,11 +127,13 @@ Removal preserves edited files, shared loaders, logs, backups, saves and setting
 ### Amethyst Accessibility Mod Manager
 
 With the game closed, find **Echo Stone** under **Marvel vs. Capcom: Infinite**
-in the [buu420 catalog](https://github.com/buu420/buu-s-mods). The manager asks for consent to a read-only compatibility check
-before it installs the files. Remove a previous standalone install with its
-uninstaller before switching to Amethyst. If that uninstaller reports
-preserved files, use the Windows ZIP until the ownership conflict is resolved.
-Close the game before installing, updating, or removing the mod.
+in the [buu420 catalog](https://github.com/buu420/buu-s-mods). Choose Install
+and allow the read-only compatibility check. You can install over an intact
+Echo Stone 0.1.0, 0.1.1, or 0.1.2 Windows ZIP installation. If you do, Amethyst
+backs up that copy and restores it when you uninstall through Amethyst.
+
+Use Amethyst for updates and removal while it manages Echo Stone. Close the
+game before installing, updating, or removing the mod.
 
 ## Troubleshooting
 
